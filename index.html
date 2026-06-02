@@ -20,7 +20,7 @@ import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/fir
 // ╚══════════════════════════════════════════════════════════════╝
 
 const QUINIELA_NOMBRE = "Quiniela ChoyeritOZ";   // Nombre que aparece en la plataforma
-const ADMIN_USER      = "admin";              // Usuario del administrador
+const ADMIN_USER      = "zrosa";              // Usuario del administrador
 const ADMIN_PASS      = "galleto123";          // Contraseña del administrador
 const ADMIN_NOMBRE    = "Zara";              // Nombre del administrador
 
@@ -352,7 +352,7 @@ body.theme-light .theme-btn:hover{background:rgba(0,0,0,0.06);}
 </script>
 <div id="loading-overlay">
   <div class="loader"></div>
-  <div style="color:var(--text2);font-size:13px;">Cargando Mundialito...</div>
+  <div style="color:var(--text2);font-size:13px;">Cargando Cargando...</div>
 </div>
 
 <!-- LOGIN -->
@@ -381,7 +381,7 @@ body.theme-light .theme-btn:hover{background:rgba(0,0,0,0.06);}
     <div class="login-logo">
       <span class="trophy">⚽</span>
       <h1>CREAR CUENTA</h1>
-      <p>Únete al Mundialito</p>
+      <p>Únete a la Quiniela</p>
     </div>
     <div class="form-group"><label>Nombre completo</label><input id="rg-name" type="text" placeholder="Ej: Carlos García"></div>
     <div class="form-group"><label>Usuario</label><input id="rg-user" type="text" placeholder="Sin espacios, ej: carlosg"></div>
@@ -397,12 +397,13 @@ body.theme-light .theme-btn:hover{background:rgba(0,0,0,0.06);}
 <div id="app-screen" class="screen" style="flex-direction:column;">
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <div class="topbar-logo" id="topbar-logo">⚽ MUNDIALITO 2026</div>
+      <div class="topbar-logo" id="topbar-logo">⚽ QUINIELA CHOYERITOZ</div>
       <div class="topbar-nav">
         <button class="nav-btn active" id="tn-groups" onclick="showTab('groups')">🌍 Grupos</button>
         <button class="nav-btn" id="tn-elim" onclick="showTab('elim')">⚔️ Eliminación</button>
         <button class="nav-btn" id="tn-mypicks" onclick="showTab('mypicks')">📋 Mis picks</button>
         <button class="nav-btn" id="tn-standings" onclick="showTab('standings')">🏆 Clasificación</button>
+        <button class="nav-btn" id="tn-compare" onclick="showTab('compare')">👥 Ver Picks</button>
         <button class="nav-btn" id="tn-admin" style="display:none;" onclick="showTab('admin')">⚙️ Admin</button>
       </div>
     </div>
@@ -423,7 +424,7 @@ body.theme-light .theme-btn:hover{background:rgba(0,0,0,0.06);}
     <div class="tab-pane active" id="tab-groups">
       <div class="phase-head">
         <div>
-          <h2>⚽ FASE DE GRUPOS — MUNDIALITO 2026</h2>
+          <h2>⚽ FASE DE GRUPOS — QUINIELA CHOYERITOZ</h2>
           <p>1er clic = 1er lugar · 2do clic = 2do lugar · 3er clic = 3er lugar · Clic sobre seleccionado = quitar</p>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
@@ -474,6 +475,15 @@ body.theme-light .theme-btn:hover{background:rgba(0,0,0,0.06);}
         <thead><tr><th>#</th><th>Participante</th><th>Grupos</th><th style="text-align:right;padding-right:18px;">Pts</th></tr></thead>
         <tbody id="standings-body"></tbody>
       </table></div>
+    </div>
+
+    <!-- VER PICKS DE TODOS -->
+    <div class="tab-pane" id="tab-compare">
+      <div class="phase-head">
+        <div><h2>👥 PICKS DE TODOS</h2><p>Selecciona un participante para ver sus pronósticos y compararlos con los tuyos</p></div>
+      </div>
+      <div id="compare-selector" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;"></div>
+      <div id="compare-view"></div>
     </div>
 
     <!-- ADMIN -->
@@ -672,13 +682,14 @@ async function init(){
 // ══════════════════════════════════════
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function showTab(tab){
-  ['groups','elim','mypicks','standings','admin'].forEach(t=>{
+  ['groups','elim','mypicks','standings','compare','admin'].forEach(t=>{
     document.getElementById('tab-'+t).classList.toggle('active',t===tab);
     const b=document.getElementById('tn-'+t);if(b)b.classList.toggle('active',t===tab);
   });
   if(tab==='standings')renderStandings();
   if(tab==='mypicks')renderMyPicks();
   if(tab==='elim')renderBracket();
+  if(tab==='compare')renderCompare();
   if(tab==='admin'){
     selectedPlayer=null;
     renderAdminGroups();renderAdminBracket();
@@ -1167,6 +1178,126 @@ function showPlayerPicks(username, userData, btn){
   });
   html+='</div>';
   view.innerHTML=html;
+}
+
+// ══════════════════════════════════════
+// VER PICKS DE TODOS — para todos los usuarios
+// ══════════════════════════════════════
+let compareSelectedUser = null;
+
+function renderCompare(){
+  const sel = document.getElementById('compare-selector');
+  const view = document.getElementById('compare-view');
+  sel.innerHTML = '';
+
+  // Mostrar todos los usuarios que tengan picks guardados
+  const players = Object.entries(allUsers).filter(([u]) => allPicks[u]);
+  if(players.length === 0){
+    view.innerHTML = '<p style="color:var(--text3);padding:24px 0;">Aún no hay pronósticos guardados.</p>';
+    return;
+  }
+
+  players.forEach(([u, data])=>{
+    const initials = data.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    const isMe = u === currentUser;
+    const displayName = u===window._ADMIN_USER?(window._ADMIN_NOMBRE||'Admin')+' (admin)':data.name;
+    const btn = document.createElement('button');
+    const isActive = compareSelectedUser === u;
+    btn.style.cssText = `display:flex;align-items:center;gap:8px;background:${isActive?'rgba(0,83,145,0.12)':'var(--card-bg)'};border:1.5px solid ${isActive?'var(--fifa)':'var(--border)'};border-radius:10px;padding:8px 14px;color:${isActive?'var(--fifa)':'var(--text2)'};font-family:Outfit,sans-serif;font-size:13px;cursor:pointer;transition:all 0.2s;`;
+    btn.innerHTML = `
+      <div style="width:28px;height:28px;border-radius:50%;background:${AVATAR_COLORS[data.colorIndex||0]};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${data.colorIndex===0?'#111':'#fff'};flex-shrink:0;">${initials}</div>
+      <span>${displayName}${isMe?' <span style="font-size:10px;background:rgba(0,83,145,0.12);color:var(--fifa);border:1px solid rgba(0,83,145,0.2);border-radius:20px;padding:1px 6px;">Tú</span>':''}</span>
+    `;
+    btn.onclick = () => { compareSelectedUser = u; renderCompare(); };
+    sel.appendChild(btn);
+  });
+
+  if(!compareSelectedUser && players.length > 0) {
+    // Seleccionar el primero por defecto
+    compareSelectedUser = players[0][0];
+    renderCompare();
+    return;
+  }
+
+  const userData = allUsers[compareSelectedUser];
+  const theirPicks = allPicks[compareSelectedUser] || {};
+  const myPicks = allPicks[currentUser] || {};
+  const displayName = compareSelectedUser===window._ADMIN_USER?(window._ADMIN_NOMBRE||'Admin')+' (admin)':userData.name;
+  const isMe = compareSelectedUser === currentUser;
+  const score = calcScore(theirPicks);
+  const grpsDone = GROUPS.filter(g=>{const p=theirPicks[g.id]||{};return p.pos1&&p.pos2&&p.pos3;}).length;
+  const initials = userData.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+
+  let html = `
+    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:13px;overflow:hidden;margin-bottom:20px;">
+      <div style="background:rgba(0,83,145,0.08);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:40px;height:40px;border-radius:50%;background:${AVATAR_COLORS[userData.colorIndex||0]};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:${userData.colorIndex===0?'#111':'#fff'};">${initials}</div>
+          <div>
+            <div style="font-family:Bebas Neue,sans-serif;font-size:20px;letter-spacing:1px;color:var(--fifa);">${displayName}</div>
+            <div style="font-size:12px;color:var(--text2);">${grpsDone}/12 grupos completos</div>
+          </div>
+        </div>
+        <div style="font-family:Bebas Neue,sans-serif;font-size:36px;color:var(--fifa);">${score} <span style="font-size:14px;color:var(--text3);">pts</span></div>
+      </div>
+    </div>
+    <div class="picks-grid">`;
+
+  GROUPS.forEach(g => {
+    const tp = theirPicks[g.id] || {};  // picks del usuario seleccionado
+    const mp = myPicks[g.id] || {};     // mis picks
+    const official = officialResults[g.id] || null;
+    const hasOfficial = official && official.pos1;
+
+    html += `<div class="pick-card"><div class="pick-group-title">GRUPO ${g.id}</div>`;
+
+    [[tp.pos1,'1°','lb-1'],[tp.pos2,'2°','lb-2'],[tp.pos3,'3°','lb-3']].forEach(([name,lbl,cls]) => {
+      if(!name) return;
+      const team = g.teams.find(t=>t.name===name);
+      const fc = team ? team.flag : 'un';
+
+      // Comparar con mis picks
+      let matchIcon = '';
+      if(!isMe){
+        const iInMyPicks = mp.pos1===name||mp.pos2===name||mp.pos3===name;
+        const samePos = (lbl==='1°'&&mp.pos1===name)||(lbl==='2°'&&mp.pos2===name)||(lbl==='3°'&&mp.pos3===name);
+        if(samePos){
+          matchIcon = '<span style="font-size:10px;background:rgba(34,197,94,0.15);color:#16a34a;border:1px solid rgba(34,197,94,0.3);border-radius:20px;padding:1px 6px;margin-left:4px;">✓ igual</span>';
+        } else if(iInMyPicks){
+          matchIcon = '<span style="font-size:10px;background:rgba(245,197,24,0.12);color:#b48a00;border:1px solid rgba(245,197,24,0.25);border-radius:20px;padding:1px 6px;margin-left:4px;">~ mismo equipo</span>';
+        }
+      }
+
+      // Acierto oficial si hay resultados
+      let officialIcon = '';
+      if(hasOfficial){
+        const offSet = new Set([official.pos1,official.pos2,official.pos3]);
+        const posKey = lbl==='1°'?'pos1':lbl==='2°'?'pos2':'pos3';
+        if(official[posKey]===name){
+          officialIcon = '<span style="font-size:10px;background:rgba(34,197,94,0.15);color:#16a34a;border:1px solid rgba(34,197,94,0.3);border-radius:20px;padding:1px 6px;margin-left:2px;">✓ exacto</span>';
+        } else if(offSet.has(name)){
+          officialIcon = '<span style="font-size:10px;background:rgba(0,83,145,0.1);color:var(--fifa);border:1px solid rgba(0,83,145,0.2);border-radius:20px;padding:1px 6px;margin-left:2px;">✓ pasa</span>';
+        } else {
+          officialIcon = '<span style="font-size:10px;background:rgba(239,68,68,0.08);color:#ef4444;border:1px solid rgba(239,68,68,0.2);border-radius:20px;padding:1px 6px;margin-left:2px;">✗</span>';
+        }
+      }
+
+      html += `<div class="pick-row">
+        <div class="pick-pos leg-badge ${cls}">${lbl}</div>
+        <img src="https://flagcdn.com/w40/${fc}.png" style="width:22px;height:15px;border-radius:2px;object-fit:cover;">
+        <span style="flex:1;">${name}</span>
+        ${matchIcon}${officialIcon}
+      </div>`;
+    });
+
+    if(!tp.pos1 && !tp.pos2 && !tp.pos3){
+      html += '<div class="no-pick">Sin selección</div>';
+    }
+    html += '</div>';
+  });
+
+  html += '</div>';
+  view.innerHTML = html;
 }
 
 // ══════════════════════════════════════
